@@ -80,28 +80,22 @@ public class ClientRoleHeaderAuthenticationMiddleware
         // 2. When using simulator authentication in development mode.
         bool isAuthenticatedRequest = httpContext.User.Identity?.IsAuthenticated ?? false;
 
+        // The client role is solely defined by the CLIENT_ROLE_HEADER.
         if (isAuthenticatedRequest)
         {
-            clientDefinedRole = AuthorizationType.Authenticated.ToString();
+            string headerRole = httpContext.Request.Headers[AuthorizationResolver.CLIENT_ROLE_HEADER].ToString();
+            if (!string.IsNullOrWhiteSpace(headerRole))
+            {
+                clientDefinedRole = headerRole;
+            }
+            else {
+                clientDefinedRole = AuthorizationType.Authenticated.ToString();
+            }
         }
-
-        // Attempt to inject CLIENT_ROLE_HEADER:clientDefinedRole into the httpContext
-        // to accommodate client requests that do not include such header.
-        // otherwise honor existing CLIENT_ROLE_HEADER:Value
-        if (!httpContext.Request.Headers.TryAdd(AuthorizationResolver.CLIENT_ROLE_HEADER, clientDefinedRole))
+        else
         {
-            // Honor the client role header value already included
-            // in an authenticated requests.
-            if (isAuthenticatedRequest)
-            {
-                clientDefinedRole = httpContext.Request.Headers[AuthorizationResolver.CLIENT_ROLE_HEADER].ToString();
-            }
-            else
-            {
-                // Override existing client role header value for anonymous requests.
-                httpContext.Request.Headers[AuthorizationResolver.CLIENT_ROLE_HEADER]
-                    = clientDefinedRole;
-            }
+            // Override existing client role header value for anonymous requests.
+            httpContext.Request.Headers[AuthorizationResolver.CLIENT_ROLE_HEADER] = clientDefinedRole;
         }
 
         // Log the request's authenticated status (anonymous/authenticated) and user role,
@@ -114,7 +108,7 @@ public class ClientRoleHeaderAuthenticationMiddleware
                 message: "{correlationId} Request authentication state: {requestAuthStatus}.",
                 correlationId,
                 requestAuthStatus);
-            _logger.LogDebug("{correlationId} The request will be executed in the context of the role: {clientDefinedRole}",
+            _logger.LogDebug("{correlationId} The request will be executed in the context of the role: {clientDefinedRole}.",
                 correlationId,
                 clientDefinedRole);
         }
@@ -122,7 +116,7 @@ public class ClientRoleHeaderAuthenticationMiddleware
         // When the user is not in the clientDefinedRole and the client role header
         // is resolved to a system role (anonymous, authenticated), add the matching system
         // role name as a role claim to the ClaimsIdentity.
-        if (!httpContext.User.IsInRole(clientDefinedRole) && IsSystemRole(clientDefinedRole))
+        if (!httpContext.User.IsInRole(clientDefinedRole) && isAuthenticatedRequest)
         {
             Claim claim = new(AuthenticationOptions.ROLE_CLAIM_TYPE, clientDefinedRole, ClaimValueTypes.String);
             string authenticationType = isAuthenticatedRequest ? INTERNAL_DAB_IDENTITY_PROVIDER : string.Empty;
