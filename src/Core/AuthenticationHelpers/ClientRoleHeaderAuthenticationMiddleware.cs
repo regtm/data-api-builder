@@ -83,6 +83,7 @@ public class ClientRoleHeaderAuthenticationMiddleware
         // The client role is solely defined by the CLIENT_ROLE_HEADER.
         if (isAuthenticatedRequest)
         {
+            // If the CLIENT_ROLE_HEAER is empty, but the jwt valid the request has authenticated role.
             string headerRole = httpContext.Request.Headers[AuthorizationResolver.CLIENT_ROLE_HEADER].ToString();
             if (!string.IsNullOrWhiteSpace(headerRole))
             {
@@ -113,9 +114,8 @@ public class ClientRoleHeaderAuthenticationMiddleware
                 clientDefinedRole);
         }
 
-        // When the user is not in the clientDefinedRole and the client role header
-        // is resolved to a system role (anonymous, authenticated), add the matching system
-        // role name as a role claim to the ClaimsIdentity.
+        // Add role as role claim in the ClaimsIdentity.
+        // It is expected that there is no role in the httpContext as EntraID does not allow dynamic custom claims for client credentials.
         if (!httpContext.User.IsInRole(clientDefinedRole) && isAuthenticatedRequest)
         {
             Claim claim = new(AuthenticationOptions.ROLE_CLAIM_TYPE, clientDefinedRole, ClaimValueTypes.String);
